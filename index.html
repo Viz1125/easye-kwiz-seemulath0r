@@ -1187,7 +1187,10 @@ const db = firebase.firestore();
 // ============================================================
 // SHARED DECK — GitHub Release URL (update the file here to update for all users)
 // ============================================================
-const SHARED_DECK_URL = 'https://github.com/Viz1125/easye-kwiz-seemulath0r/releases/download/vzdofenamaindeckasdajsnd/1qaz2wsxMainDeck3edc.apkg';
+// File must live at: repo root → decks/1qaz2wsxMainDeck3edc.apkg
+// GitHub Pages serves this with proper CORS headers (no proxy needed).
+// DO NOT use a GitHub Releases URL here — those redirect to AWS S3 which blocks CORS.
+const SHARED_DECK_URL = 'https://viz1125.github.io/easye-kwiz-seemulath0r/decks/1qaz2wsxMainDeck3edc.apkg';
 const SHARED_DECK_NAME = '1qaz2wsxMainDeck3edc';
 
 // ============================================================
@@ -1448,9 +1451,7 @@ async function loadSharedDeck() {
   show('loading');
   status('Downloading main deck from GitHub…');
   try {
-    // GitHub release assets redirect to S3 which blocks CORS — use a proxy
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(SHARED_DECK_URL);
-    const resp = await fetch(proxyUrl);
+    const resp = await fetch(SHARED_DECK_URL);
     if (!resp.ok) throw new Error(`HTTP ${resp.status} — check the GitHub URL or your connection.`);
     const blob = await resp.blob();
     const file = new File([blob], SHARED_DECK_NAME + '.apkg', { type: 'application/octet-stream' });
