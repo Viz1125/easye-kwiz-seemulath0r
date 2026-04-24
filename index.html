@@ -736,6 +736,7 @@ hr.div { border: none; border-top: 1px solid var(--card-border); margin: 14px 0;
 .hgm-take-bar-wrap { flex: 1; height: 6px; background: rgba(255,255,255,.08); border-radius: 3px; }
 .hgm-take-bar { height: 100%; border-radius: 3px; transition: width .4s; }
 .hgm-take-date { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; white-space: nowrap; }
+.hgm-take-conf { font-size: 11px; font-family: 'DM Mono', monospace; white-space: nowrap; min-width: 52px; text-align: right; }
 .hgm-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-style: italic; font-size: 14px; }
 /* 📈 button in top bar */
 .btn-history-graph {
@@ -1934,7 +1935,7 @@ kbd {
     </div>
     <div class="hgm-stats-row" id="hgm-stats-row"></div>
     <div class="hgm-graph-area" id="hgm-graph-area">
-      <div class="hgm-graph-label">Score % per attempt</div>
+      <div class="hgm-graph-label">Score & Confidence % per attempt</div>
       <svg class="hgm-graph-svg" id="hgm-graph-svg" height="90"></svg>
     </div>
     <div class="hgm-takes-list" id="hgm-takes-list"></div>
@@ -1966,6 +1967,9 @@ kbd {
     </div>
     <p class="modal-msg"   id="cm-msg"></p>
     <p class="modal-grade">Passing grade: 70%</p>
+    <div id="cm-confidence-row" style="display:none;margin:6px 0 10px;padding:6px 14px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.25);border-radius:8px;font-size:13px;text-align:center;">
+      🧠 Confidence: <span id="cm-confidence-val" style="font-family:'DM Mono',monospace;font-weight:700;">–</span>
+    </div>
     <div class="history-graph-wrap" id="cm-graph-wrap" style="display:none;">
       <div class="history-graph-title">📈 Score History</div>
       <svg class="history-graph-svg" id="cm-graph-svg" height="60"></svg>
@@ -3556,6 +3560,24 @@ function showCompletionPopup() {
   document.getElementById('cm-msg').textContent = passed
     ? `Excellent work! You passed with ${pctStr}%.`
     : `You scored ${pctStr}%. You need at least 70% to pass.`;
+
+  // Compute and show confidence for this attempt
+  const confAns = Object.values(S.answered).filter(a => a && a.confidence);
+  const curConfPct = confAns.length
+    ? parseFloat((confAns.reduce((sum, a) => sum + (a.confidence === 'sure' ? 100 : a.confidence === 'unsure' ? 50 : 0), 0) / confAns.length).toFixed(1))
+    : null;
+  const confEl = document.getElementById('cm-confidence-row');
+  if (confEl) {
+    if (curConfPct !== null) {
+      confEl.style.display = 'block';
+      document.getElementById('cm-confidence-val').textContent = curConfPct.toFixed(1) + '%';
+      const confColor = curConfPct >= 70 ? '#4caf50' : curConfPct >= 40 ? '#ffc107' : '#ef5350';
+      document.getElementById('cm-confidence-val').style.color = confColor;
+    } else {
+      confEl.style.display = 'none';
+    }
+  }
+
   document.getElementById('completion-modal').style.display = 'flex';
 
   // Show Retry Wrong Answers if any wrong
@@ -3566,7 +3588,7 @@ function showCompletionPopup() {
   if (retryBtn) retryBtn.classList.toggle('visible', hasWrong);
 
   // Render history graph (async)
-  renderScoreHistoryGraph(pct).catch(() => {});
+  renderScoreHistoryGraph(pct, curConfPct).catch(() => {});
 }
 function closeCompletionModal() {
   document.getElementById('completion-modal').style.display = 'none';
@@ -3954,9 +3976,16 @@ async function submitQuiz() {
           chosen:  ans ? (ans.chosenText || sh.opts[ans.chosen] || '') : '',
           correct: sh.correct || sh.opts[sh.ci] || '',
           ok:      ans ? !!ans.ok : false,
-          skipped: !ans || !!ans.skipped
+          skipped: !ans || !!ans.skipped,
+          confidence: ans ? (ans.confidence || null) : null
         });
       }
+
+      // Compute confidence score: sure=100, unsure=50, guessed=0
+      const confAnswers = Object.values(S.answered).filter(a => a && a.confidence);
+      const confPct = confAnswers.length
+        ? parseFloat((confAnswers.reduce((sum, a) => sum + (a.confidence === 'sure' ? 100 : a.confidence === 'unsure' ? 50 : 0), 0) / confAnswers.length).toFixed(1))
+        : null;
 
       await saveHistoryEntry(S.deckKey, {
         take: takeNum,
@@ -3968,7 +3997,8 @@ async function submitQuiz() {
         pct: pct.toFixed(1),
         passed,
         timestamp: Date.now(),
-        answers: perQuestion
+        answers: perQuestion,
+        confidencePct: confPct
       });
       S.takeCount++; // Increment so next submit is correct if they reset & retake
     } catch(e) { console.warn('History save failed:', e); }
@@ -4830,6 +4860,10 @@ function buildGraphSVG(entries, svgId, W, H, padL) {
   const n = entries.length;
   const pcts = entries.map(e => parseFloat(e.pct) || 0);
 
+  // Confidence data
+  const confPcts = entries.map(e => (e.confidencePct !== undefined && e.confidencePct !== null) ? parseFloat(e.confidencePct) : null);
+  const hasConf = confPcts.some(v => v !== null);
+
   const xPos = i => pad.l + (n === 1 ? gW / 2 : (i / (n - 1)) * gW);
   const yPos = v => pad.t + gH - (Math.min(100, Math.max(0, v)) / 100) * gH;
 
@@ -4853,6 +4887,30 @@ function buildGraphSVG(entries, svgId, W, H, padL) {
       <title>Take ${i+1}: ${v.toFixed(1)}%</title></circle>`;
   }).join('');
 
+  // Confidence line and dots
+  let confSvg = '';
+  if (hasConf) {
+    const validConfPairs = confPcts.map((v, i) => v !== null ? { v, i } : null).filter(Boolean);
+    if (validConfPairs.length >= 2) {
+      const confPts = validConfPairs.map(({ v, i }) => `${xPos(i)},${yPos(v)}`).join(' ');
+      confSvg += `<polyline points="${confPts}" fill="none" stroke="#ffc107" stroke-width="1.5" stroke-dasharray="4,3" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/>`;
+    }
+    confSvg += confPcts.map((v, i) => {
+      if (v === null) return '';
+      const isCurrent = i === n - 1;
+      return `<circle cx="${xPos(i)}" cy="${yPos(v)}" r="${isCurrent ? 4 : 2.5}" fill="#ffc107" stroke="var(--surface)" stroke-width="${isCurrent ? 2 : 1}" opacity=".9"><title>🧠 Confidence Take ${i+1}: ${v.toFixed(1)}%</title></circle>`;
+    }).join('');
+  }
+
+  // Legend (only when confidence data exists)
+  const legendX = pad.l + gW - (hasConf ? 80 : 0);
+  const legend = hasConf ? `
+    <line x1="${pad.l + gW - 80}" y1="${pad.t + 6}" x2="${pad.l + gW - 66}" y2="${pad.t + 6}" stroke="var(--accent)" stroke-width="2"/>
+    <text x="${pad.l + gW - 62}" y="${pad.t + 9}" font-size="7" fill="var(--text-muted)" font-family="monospace">Score</text>
+    <line x1="${pad.l + gW - 80}" y1="${pad.t + 17}" x2="${pad.l + gW - 66}" y2="${pad.t + 17}" stroke="#ffc107" stroke-width="1.5" stroke-dasharray="4,3" opacity=".85"/>
+    <text x="${pad.l + gW - 62}" y="${pad.t + 20}" font-size="7" fill="var(--text-muted)" font-family="monospace">Confidence</text>
+  ` : '';
+
   // X labels: first, last, and up to 2 in between
   const labelSet = new Set([0, n-1]);
   if (n >= 3) labelSet.add(Math.round((n-1)/3));
@@ -4873,9 +4931,11 @@ function buildGraphSVG(entries, svgId, W, H, padL) {
     ${passLine}
     <path d="${areaPath}" fill="url(#g${svgId})"/>
     ${n > 1 ? `<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+    ${confSvg}
     ${yLabels}
     ${xLabels}
     ${dots}
+    ${legend}
   `;
 }
 
@@ -4906,12 +4966,28 @@ async function openHistoryModal() {
   const last  = pcts[pcts.length - 1];
   const passes = entries.filter(e => e.passed).length;
 
+  // Confidence stats
+  const confValues = entries.filter(e => e.confidencePct !== undefined && e.confidencePct !== null).map(e => parseFloat(e.confidencePct));
+  const avgConf = confValues.length ? confValues.reduce((a,b) => a+b, 0) / confValues.length : null;
+  const lastConf = (() => {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (entries[i].confidencePct !== undefined && entries[i].confidencePct !== null) return parseFloat(entries[i].confidencePct);
+    }
+    return null;
+  })();
+
+  const confStatHtml = avgConf !== null ? `
+    <div class="hgm-stat"><div class="hgm-stat-num" style="color:#ffc107">${avgConf.toFixed(1)}%</div><div class="hgm-stat-lbl">Avg Confidence</div></div>
+    <div class="hgm-stat"><div class="hgm-stat-num" style="color:${lastConf >= 70 ? '#4caf50' : lastConf >= 40 ? '#ffc107' : '#ef5350'}">${lastConf.toFixed(1)}%</div><div class="hgm-stat-lbl">Last Confidence</div></div>
+  ` : '';
+
   document.getElementById('hgm-stats-row').innerHTML = `
     <div class="hgm-stat"><div class="hgm-stat-num" style="color:var(--accent)">${entries.length}</div><div class="hgm-stat-lbl">Attempts</div></div>
     <div class="hgm-stat"><div class="hgm-stat-num" style="color:${best>=70?'var(--green)':'var(--red)'}">${best.toFixed(1)}%</div><div class="hgm-stat-lbl">Best</div></div>
     <div class="hgm-stat"><div class="hgm-stat-num" style="color:var(--text)">${avg.toFixed(1)}%</div><div class="hgm-stat-lbl">Average</div></div>
     <div class="hgm-stat"><div class="hgm-stat-num" style="color:${last>=70?'var(--green)':'var(--red)'}">${last.toFixed(1)}%</div><div class="hgm-stat-lbl">Latest</div></div>
     <div class="hgm-stat"><div class="hgm-stat-num" style="color:${passes?'var(--green)':'var(--text-muted)'}">${passes}/${entries.length}</div><div class="hgm-stat-lbl">Passed</div></div>
+    ${confStatHtml}
   `;
 
   // Draw graph
@@ -4924,11 +5000,16 @@ async function openHistoryModal() {
     const pct = parseFloat(e.pct) || 0;
     const pass = !!e.passed;
     const barColor = pass ? '#4caf50' : '#ef5350';
+    const confPct = (e.confidencePct !== undefined && e.confidencePct !== null) ? parseFloat(e.confidencePct) : null;
+    const confBadge = confPct !== null
+      ? `<span class="hgm-take-conf" style="color:${confPct >= 70 ? '#4caf50' : confPct >= 40 ? '#ffc107' : '#ef5350'}">🧠 ${confPct.toFixed(0)}%</span>`
+      : `<span class="hgm-take-conf" style="color:var(--text-muted)">🧠 –</span>`;
     takesHtml += `
       <div class="hgm-take-row ${pass ? 'pass' : 'fail'}">
         <span class="hgm-take-num">#${i+1} Take</span>
         <span class="hgm-take-pct ${pass ? 'pass':'fail'}">${pct.toFixed(1)}%</span>
         <div class="hgm-take-bar-wrap"><div class="hgm-take-bar" style="width:${pct}%;background:${barColor}"></div></div>
+        ${confBadge}
         <span class="hgm-take-date">${e.date || '–'}</span>
         <span style="font-size:11px;${pass?'color:var(--green)':'color:var(--red)'}">${pass ? '✅':'❌'}</span>
       </div>`;
@@ -4940,11 +5021,11 @@ function closeHistoryModal() {
   document.getElementById('history-graph-modal').classList.remove('open');
 }
 
-async function renderScoreHistoryGraph(currentPct) {
+async function renderScoreHistoryGraph(currentPct, currentConfPct) {
   // Small inline preview in completion modal
   const entries = await fetchHistoryPoints();
   // Include current attempt as the last point
-  const preview = [...entries, { pct: currentPct.toFixed(1), passed: currentPct >= 70 }];
+  const preview = [...entries, { pct: currentPct.toFixed(1), passed: currentPct >= 70, confidencePct: currentConfPct !== undefined ? currentConfPct : null }];
   const wrap = document.getElementById('cm-graph-wrap');
   if (!wrap) return;
   if (preview.length < 2) { wrap.style.display = 'none'; return; }
