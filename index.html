@@ -645,6 +645,69 @@ hr.div { border: none; border-top: 1px solid var(--card-border); margin: 14px 0;
 .btn-apply:hover { opacity: .85; }
 .img-missing { display: inline-block; border: 2px dashed var(--text-muted); border-radius: 8px; padding: 10px 16px; color: var(--text-muted); font-size: 13px; margin: 6px 0; }
 
+/* ===== CONFIDENCE RATING ===== */
+.confidence-bar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  animation: fadeIn .2s ease;
+}
+.confidence-bar.visible { display: flex; }
+.confidence-label { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; white-space: nowrap; }
+.confidence-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 14px; border-radius: 20px; border: 1px solid var(--card-border);
+  background: transparent; color: var(--text-dim); font-family: inherit; font-size: 13px;
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+}
+.confidence-btn:hover { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
+.confidence-btn.selected-sure    { background: rgba(76,175,80,.18);  border-color: #4caf50; color: #4caf50; }
+.confidence-btn.selected-unsure  { background: rgba(255,193,7,.14);  border-color: #ffc107; color: #ffc107; }
+.confidence-btn.selected-guessed { background: rgba(239,83,80,.14);  border-color: #ef5350; color: #ef5350; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+/* Confidence dots in sidebar */
+.conf-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-left: 4px; vertical-align: middle; flex-shrink: 0; }
+.conf-dot.sure    { background: #4caf50; }
+.conf-dot.unsure  { background: #ffc107; }
+.conf-dot.guessed { background: #ef5350; }
+
+/* ===== SCORE HISTORY GRAPH ===== */
+.history-graph-wrap {
+  margin: 12px 0 10px;
+  background: rgba(0,0,0,.15);
+  border-radius: 10px;
+  padding: 12px 14px 8px;
+}
+.history-graph-title {
+  font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; text-align: left;
+}
+.history-graph-svg { display: block; width: 100%; overflow: visible; }
+
+/* ===== RETRY WRONG ANSWERS ===== */
+.btn-retry-wrong {
+  display: none; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 8px; border: 1px solid rgba(239,83,80,.45);
+  background: rgba(139,0,0,.2); color: #f08080;
+  font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: background .2s, border-color .2s, color .2s;
+}
+.btn-retry-wrong.visible { display: inline-flex; }
+.btn-retry-wrong:hover { background: rgba(180,0,0,.38); border-color: var(--red); color: #fff; }
+
+/* Modal retry button */
+.modal-retry-btn {
+  display: none; width: 100%; margin-top: 8px;
+  padding: 8px 20px; background: rgba(139,0,0,.22); color: #f08080;
+  border: 1px solid rgba(220,50,50,.45); border-radius: 9px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700; transition: background .2s, color .2s;
+}
+.modal-retry-btn.visible { display: block; }
+.modal-retry-btn:hover { background: rgba(180,0,0,.4); color: #fff; }
+
 /* ===== COMPLETION MODAL ===== */
 #completion-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
 .modal-box { background: var(--surface); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px 28px 20px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.65); animation: popIn .35s cubic-bezier(.175,.885,.32,1.275); margin: auto; }
@@ -1699,6 +1762,14 @@ kbd {
         <ol class="answers-list" id="answers-list"></ol>
       </div>
 
+      <!-- CONFIDENCE RATING -->
+      <div class="confidence-bar" id="confidence-bar">
+        <span class="confidence-label">How sure were you?</span>
+        <button class="confidence-btn" id="conf-sure"    onclick="setConfidence('sure')">😎 Sure</button>
+        <button class="confidence-btn" id="conf-unsure"  onclick="setConfidence('unsure')">🤔 Unsure</button>
+        <button class="confidence-btn" id="conf-guessed" onclick="setConfidence('guessed')">🎲 Guessed</button>
+      </div>
+
       <div id="exp-section" style="display:none;margin-bottom:12px;">
         <button class="toggle-btn" id="exp-btn" onclick="toggle('exp')">📖 Show Explanation</button>
         <div class="toggle-body" id="exp-body"></div>
@@ -1726,6 +1797,7 @@ kbd {
       <div class="expert-panel" id="expert-panel" style="display:none;">
         <div class="action-btns">
           <button class="btn-a c-green" id="reveal-btn" onclick="toggleReveal()">👁 Show Answer</button>
+          <button class="btn-retry-wrong" id="retry-wrong-btn" onclick="retryWrongAnswers()" title="Restart with only incorrect questions">🔁 Retry Wrong Answers</button>
           <div class="feedback-switch-wrap inactive" id="feedback-switch" onclick="toggleInstantFeedback()" title="Toggle whether correct/wrong highlight shows immediately after answering">
             <div class="switch-pill" id="feedback-pill"><div class="switch-knob"></div></div>
             <span id="feedback-switch-label">Feedback Off</span>
@@ -1813,7 +1885,12 @@ kbd {
     </div>
     <p class="modal-msg"   id="cm-msg"></p>
     <p class="modal-grade">Passing grade: 70%</p>
+    <div class="history-graph-wrap" id="cm-graph-wrap" style="display:none;">
+      <div class="history-graph-title">📈 Score History</div>
+      <svg class="history-graph-svg" id="cm-graph-svg" height="60"></svg>
+    </div>
     <button class="modal-close" onclick="closeCompletionModal()">View Results →</button>
+    <button class="modal-retry-btn" id="modal-retry-btn" onclick="closeCompletionModal();retryWrongAnswers()">🔁 Retry Wrong Answers</button>
   </div>
 </div>
 
@@ -3309,6 +3386,7 @@ function updateChecklist() {
       <li class="checklist-item ${isActive ? 'active' : ''} ${itemClass}" data-idx="${i}">
         <span class="checklist-num">${i + 1}</span>
         <span class="checklist-icon ${iconClass}">${icon}</span>
+        ${isAnswered && S.answered[i].confidence ? `<span class="conf-dot ${S.answered[i].confidence}" title="${S.answered[i].confidence}"></span>` : ''}
       </li>`;
   }
   container.innerHTML = html;
@@ -3396,6 +3474,16 @@ function showCompletionPopup() {
     ? `Excellent work! You passed with ${pctStr}%.`
     : `You scored ${pctStr}%. You need at least 70% to pass.`;
   document.getElementById('completion-modal').style.display = 'flex';
+
+  // Show Retry Wrong Answers if any wrong
+  const hasWrong = Object.values(S.answered).some(a => !a.ok);
+  const modalRetry = document.getElementById('modal-retry-btn');
+  if (modalRetry) modalRetry.classList.toggle('visible', hasWrong);
+  const retryBtn = document.getElementById('retry-wrong-btn');
+  if (retryBtn) retryBtn.classList.toggle('visible', hasWrong);
+
+  // Render history graph (async)
+  renderScoreHistoryGraph(pct).catch(() => {});
 }
 function closeCompletionModal() {
   document.getElementById('completion-modal').style.display = 'none';
@@ -3658,8 +3746,12 @@ async function renderCard(i) {
     } else {
       applyLockedState(ans.chosen);
     }
+    // Show confidence bar if answered and not yet submitted
+    if (!S.submitted) showConfidenceBar(i);
+    else hideConfidenceBar();
   } else {
     clearPeekStyles();
+    hideConfidenceBar();
   }
 
   updateChecklist();
@@ -3712,7 +3804,7 @@ function onAnswer(cardIdx, chosen) {
   if (S.answered[cardIdx] !== undefined) return;
   const sh = S.shuffles[cardIdx]; if (!sh) return;
   const ok = chosen === sh.ci;
-  S.answered[cardIdx] = { chosen, ok, chosenText: sh.opts[chosen] };
+  S.answered[cardIdx] = { chosen, ok, chosenText: sh.opts[chosen], confidence: null };
   addScore(ok);
   if (S.instantFeedback) {
     applyFeedback(chosen, sh);
@@ -3720,6 +3812,8 @@ function onAnswer(cardIdx, chosen) {
   } else {
     applyLockedState(chosen);
   }
+  // Show confidence bar
+  showConfidenceBar(cardIdx);
   updateScoreUI();
 }
 
@@ -3736,6 +3830,7 @@ async function submitQuiz() {
 
   // ── UI update is INSTANT — no awaiting Firestore ──
   S.submitted = true;
+  hideConfidenceBar();
   if (S.autoAdvanceTimer) { clearTimeout(S.autoAdvanceTimer); S.autoAdvanceTimer = null; }
   stopTimer();
   document.getElementById('submit-quiz-btn').classList.remove('visible');
@@ -4528,6 +4623,182 @@ document.addEventListener('keydown', e => {
 
 // Initialize — go to home screen (shows cached decks or empty state with upload prompt)
 showHomeScreen();
+
+// ============================================================
+// CONFIDENCE RATING
+// ============================================================
+function showConfidenceBar(cardIdx) {
+  const bar = document.getElementById('confidence-bar');
+  if (!bar) return;
+  // Don't show after quiz is submitted
+  if (S.submitted) { bar.classList.remove('visible'); return; }
+  bar.classList.add('visible');
+  // Restore previously set confidence if navigating back
+  const conf = S.answered[cardIdx] && S.answered[cardIdx].confidence;
+  ['sure','unsure','guessed'].forEach(c => {
+    const btn = document.getElementById('conf-' + c);
+    if (btn) { btn.className = 'confidence-btn' + (conf === c ? ' selected-' + c : ''); }
+  });
+}
+
+function hideConfidenceBar() {
+  const bar = document.getElementById('confidence-bar');
+  if (bar) bar.classList.remove('visible');
+}
+
+function setConfidence(level) {
+  const ans = S.answered[S.idx];
+  if (!ans) return;
+  ans.confidence = ans.confidence === level ? null : level; // toggle off if same
+  ['sure','unsure','guessed'].forEach(c => {
+    const btn = document.getElementById('conf-' + c);
+    if (btn) {
+      btn.className = 'confidence-btn' + (ans.confidence === c ? ' selected-' + c : '');
+    }
+  });
+  updateChecklist();
+}
+
+// ============================================================
+// RETRY WRONG ANSWERS
+// ============================================================
+function retryWrongAnswers() {
+  if (!S.submitted) { showToast('⚠ Submit the quiz first before retrying.', 'warn'); return; }
+  const wrongIndices = Object.keys(S.answered)
+    .map(Number)
+    .filter(i => !S.answered[i].ok);
+  if (!wrongIndices.length) { showToast('🎉 No wrong answers — you got them all!', 'ok'); return; }
+
+  // Build subset of notes from wrong answers
+  const wrongNotes = wrongIndices.map(i => S.notes[i]);
+  S.originalNotes = wrongNotes;
+  S.notes = [...wrongNotes];
+
+  if (S.randomizeOrder) {
+    for (let i = S.notes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [S.notes[i], S.notes[j]] = [S.notes[j], S.notes[i]];
+    }
+  }
+
+  S.shuffles = new Array(S.notes.length).fill(undefined);
+  S.answered = {};
+  S.idx = 0;
+  S.quizComplete = false;
+  S.revealAnswers = false;
+  S.submitted = false;
+  S.quizStartTime = Date.now();
+
+  for (let i = 0; i < S.notes.length; i++) getShuffle(i);
+  S.answerableCount = S.shuffles.filter(s => s !== null).length;
+
+  const rb = document.getElementById('reveal-btn');
+  if (rb) { rb.textContent = '👁 Show Answer'; rb.style.background = ''; rb.style.outline = ''; }
+  document.getElementById('submit-quiz-btn').classList.remove('visible');
+  document.getElementById('next-unanswered-btn').classList.remove('visible');
+  document.getElementById('sidebar-summary').classList.remove('visible');
+  document.getElementById('sidebar-title').textContent = '📋 Questions';
+
+  const retryBtn = document.getElementById('retry-wrong-btn');
+  if (retryBtn) retryBtn.classList.remove('visible');
+  const modalRetry = document.getElementById('modal-retry-btn');
+  if (modalRetry) modalRetry.classList.remove('visible');
+
+  hideConfidenceBar();
+  saveScoreAsync({ correct: 0, total: 0 }).catch(() => {});
+  updateScoreUI();
+  renderCard(0);
+  showToast(`🔁 Retrying ${wrongNotes.length} missed question${wrongNotes.length !== 1 ? 's' : ''}`, 'ok');
+}
+
+// ============================================================
+// SCORE HISTORY GRAPH
+// ============================================================
+async function renderScoreHistoryGraph(currentPct) {
+  const wrap = document.getElementById('cm-graph-wrap');
+  const svg  = document.getElementById('cm-graph-svg');
+  if (!wrap || !svg) return;
+
+  // Gather past history points
+  let points = [];
+  try {
+    if (currentUser) {
+      const col = getUserHistoryCollection();
+      if (col) {
+        const snap = await col.where('deckKey', '==', S.deckKey).orderBy('timestamp', 'asc').get();
+        snap.docs.forEach(doc => {
+          const d = doc.data();
+          if (d.pct !== undefined) points.push(parseFloat(d.pct));
+        });
+      }
+    } else {
+      const hist = JSON.parse(localStorage.getItem(HISTORY_KEY_PREFIX + S.deckKey) || '[]');
+      hist.sort((a,b) => (a.timestamp||0) - (b.timestamp||0));
+      hist.forEach(h => { if (h.pct !== undefined) points.push(parseFloat(h.pct)); });
+    }
+  } catch(e) { console.warn('Graph history fetch failed:', e); }
+
+  // Always append current attempt
+  points.push(currentPct);
+
+  if (points.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const W = 320, H = 54, pad = { l: 28, r: 8, t: 6, b: 18 };
+  const gW = W - pad.l - pad.r, gH = H - pad.t - pad.b;
+  const n = points.length;
+
+  const xPos = i => pad.l + (n === 1 ? gW / 2 : (i / (n - 1)) * gW);
+  const yPos = v => pad.t + gH - (Math.min(100, Math.max(0, v)) / 100) * gH;
+
+  // Build polyline path
+  const pts = points.map((v, i) => `${xPos(i)},${yPos(v)}`).join(' ');
+  const areaPath = `M${xPos(0)},${yPos(points[0])} ` +
+    points.slice(1).map((v, i) => `L${xPos(i+1)},${yPos(v)}`).join(' ') +
+    ` L${xPos(n-1)},${pad.t + gH} L${xPos(0)},${pad.t + gH} Z`;
+
+  // Y axis labels
+  const yLabels = [0, 70, 100].map(v =>
+    `<text x="${pad.l - 4}" y="${yPos(v) + 4}" text-anchor="end" font-size="9" fill="var(--text-muted)" font-family="monospace">${v}%</text>`
+  ).join('');
+
+  // 70% pass line
+  const passY = yPos(70);
+  const passLine = `<line x1="${pad.l}" y1="${passY}" x2="${pad.l + gW}" y2="${passY}" stroke="#4caf50" stroke-width="1" stroke-dasharray="3,3" opacity=".45"/>`;
+
+  // Data point circles
+  const dots = points.map((v, i) => {
+    const isCurrent = i === n - 1;
+    const color = v >= 70 ? '#4caf50' : '#ef5350';
+    const r = isCurrent ? 4.5 : 3;
+    return `<circle cx="${xPos(i)}" cy="${yPos(v)}" r="${r}" fill="${color}" stroke="var(--surface)" stroke-width="${isCurrent ? 2 : 1}"/>
+      <title>Take ${i + 1}: ${v.toFixed(1)}%</title>`;
+  }).join('');
+
+  // X axis take labels (first, last, current if different)
+  const xLabels = [];
+  const labelIdxs = new Set([0, n - 1]);
+  if (n > 3) labelIdxs.add(Math.floor(n / 2));
+  labelIdxs.forEach(i => {
+    xLabels.push(`<text x="${xPos(i)}" y="${H - 2}" text-anchor="middle" font-size="9" fill="var(--text-muted)" font-family="monospace">${i === n-1 ? 'Now' : `#${i+1}`}</text>`);
+  });
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="graphGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"/>
+        <stop offset="100%" stop-color="var(--accent)" stop-opacity=".03"/>
+      </linearGradient>
+    </defs>
+    ${passLine}
+    <path d="${areaPath}" fill="url(#graphGrad)"/>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+    ${yLabels}
+    ${xLabels.join('')}
+    ${dots}
+  `;
+}
 
 function toggleExpertMode() {
   const panel = document.getElementById('expert-panel');
