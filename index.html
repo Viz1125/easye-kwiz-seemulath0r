@@ -46,6 +46,7 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  padding-top: 52px;
 }
 
 /* ===== LAYOUT ===== */
@@ -67,9 +68,9 @@ body {
   border-radius: var(--radius);
   border: 1px solid var(--card-border);
   padding: 16px 12px;
-  height: calc(100vh - 40px);
+  height: calc(100vh - 92px);
   position: sticky;
-  top: 20px;
+  top: 72px;
   overflow-y: auto;
   display: none;
   flex-direction: column;
@@ -780,12 +781,32 @@ hr.div { border: none; border-top: 1px solid var(--card-border); margin: 14px 0;
   .tracker-panel { width: 100%; position: static; max-height: 320px; }
 }
 
-/* ===== AUTH UI ADDITION ===== */
-#auth-container {
+/* ===== SITE HEADER BAR ===== */
+#site-header {
   position: fixed;
-  top: 16px;
-  right: 24px;
+  top: 0; left: 0; right: 0;
   z-index: 10000;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  gap: 12px;
+}
+#site-header-left { display: flex; align-items: center; }
+#site-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#site-header-right { display: flex; align-items: center; flex-shrink: 0; }
+#auth-container {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -825,7 +846,7 @@ hr.div { border: none; border-top: 1px solid var(--card-border); margin: 14px 0;
 }
 .auth-error {
   position: fixed;
-  top: 60px;
+  top: 56px;
   right: 24px;
   z-index: 10000;
   background: #5c1a1a;
@@ -913,16 +934,23 @@ hr.div { border: none; border-top: 1px solid var(--card-border); margin: 14px 0;
 </head>
 <body>
 
-<!-- Persistent Auth UI -->
-<div id="auth-container">
-  <button id="auth-signin-btn" class="auth-btn" onclick="signIn()">
-    <span>🔐</span> Sign in
-  </button>
-  <div id="auth-user-area" style="display:none; align-items:center; gap:8px;">
-    <img id="auth-avatar" class="auth-avatar" src="" alt="" style="display:none;">
-    <span id="auth-user-name" class="auth-name"></span>
-    <button class="auth-btn" onclick="openRenameModal()" title="Rename display name" style="padding:5px 9px;">✏️</button>
-    <button id="auth-signout-btn" class="auth-btn" onclick="signOut()">Logout</button>
+<!-- Persistent Site Header -->
+<div id="site-header">
+  <div id="site-header-left">
+    <span id="site-title">easye-kwiz-seemulath0r</span>
+  </div>
+  <div id="site-header-right">
+    <div id="auth-container">
+      <button id="auth-signin-btn" class="auth-btn" onclick="signIn()">
+        <span>🔐</span> Sign in
+      </button>
+      <div id="auth-user-area" style="display:none; align-items:center; gap:8px;">
+        <img id="auth-avatar" class="auth-avatar" src="" alt="" style="display:none;">
+        <span id="auth-user-name" class="auth-name"></span>
+        <button class="auth-btn" onclick="openRenameModal()" title="Rename display name" style="padding:5px 9px;">✏️</button>
+        <button id="auth-signout-btn" class="auth-btn" onclick="signOut()">Logout</button>
+      </div>
+    </div>
   </div>
 </div>
 <div id="auth-error-msg" class="auth-error"></div>
@@ -1358,19 +1386,20 @@ function getUserScoreDoc(deckKey) {
 
 // History sync
 async function saveHistoryEntry(deckKey, entry) {
-  // Local storage fallback
-  try {
-    const history = JSON.parse(localStorage.getItem(HISTORY_KEY_PREFIX + deckKey) || '[]');
-    history.push(entry);
-    localStorage.setItem(HISTORY_KEY_PREFIX + deckKey, JSON.stringify(history));
-  } catch {}
-
-  // Firestore
   const col = getUserHistoryCollection();
-  if (!col) return;
-  try {
-    await col.add({ deckKey, ...entry });
-  } catch(e) { console.warn('Firestore saveHistory failed:', e); }
+  if (col) {
+    // Logged in: Firestore only — skipping localStorage prevents duplicate entries on render
+    try {
+      await col.add({ deckKey, ...entry });
+    } catch(e) { console.warn('Firestore saveHistory failed:', e); }
+  } else {
+    // Not logged in: localStorage only
+    try {
+      const history = JSON.parse(localStorage.getItem(HISTORY_KEY_PREFIX + deckKey) || '[]');
+      history.push(entry);
+      localStorage.setItem(HISTORY_KEY_PREFIX + deckKey, JSON.stringify(history));
+    } catch {}
+  }
 }
 
 async function clearAllHistory() {
@@ -1840,42 +1869,33 @@ async function renderTrackerPanel() {
   const content = document.getElementById('tracker-content');
   if (!content) return;
 
-  // Use a global map keyed by composite ID to avoid local+remote duplicates
   const allEntriesById = {};
 
-  // 1. Local storage
-  try {
-    for (const key of Object.keys(localStorage)) {
-      if (!key.startsWith(HISTORY_KEY_PREFIX)) continue;
-      const deckKey = key.slice(HISTORY_KEY_PREFIX.length);
-      const entries = JSON.parse(localStorage.getItem(key) || '[]');
-      entries.forEach((e, localIdx) => {
-        const uid = `local_${deckKey}_${e.timestamp || localIdx}`;
-        allEntriesById[uid] = { ...e, _uid: uid };
-      });
-    }
-  } catch {}
-
-  // 2. Firestore (logged-in users)
   if (currentUser) {
+    // Logged-in: Firestore is the only source of truth (localStorage not used when signed in)
     const col = getUserHistoryCollection();
     if (col) {
       try {
         const snap = await col.orderBy('timestamp', 'desc').get();
         snap.docs.forEach(doc => {
           const e = doc.data();
-          // Use Firestore doc ID as unique key — avoids double-counting local entries
-          const uid = `remote_${doc.id}`;
-          // Only add if not already present by timestamp match
-          const alreadyLocal = Object.values(allEntriesById).some(
-            le => le.timestamp && le.timestamp === e.timestamp && le.deckKey === e.deckKey
-          );
-          if (!alreadyLocal) {
-            allEntriesById[uid] = { ...e, _uid: uid };
-          }
+          allEntriesById[doc.id] = { ...e, _uid: doc.id };
         });
       } catch(e) { console.warn('Tracker Firestore fetch failed:', e); }
     }
+  } else {
+    // Not logged-in: localStorage only
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith(HISTORY_KEY_PREFIX)) continue;
+        const deckKey = key.slice(HISTORY_KEY_PREFIX.length);
+        const entries = JSON.parse(localStorage.getItem(key) || '[]');
+        entries.forEach((e, localIdx) => {
+          const uid = `local_${deckKey}_${e.timestamp || localIdx}`;
+          allEntriesById[uid] = { ...e, deckKey, _uid: uid };
+        });
+      }
+    } catch {}
   }
 
   // Group by deckName
