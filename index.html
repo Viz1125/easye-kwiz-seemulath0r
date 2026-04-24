@@ -1212,18 +1212,135 @@ kbd {
   animation: toastIn .28s cubic-bezier(.175,.885,.32,1.275) forwards;
   pointer-events: auto; max-width: 420px; text-align: center; line-height: 1.5;
 }
-.toast.toast-warn  { border-color: #ff9800; background: #1c1400; }
-.toast.toast-error { border-color: var(--red); background: #1c0000; }
-.toast.toast-ok    { border-color: var(--green); background: #001c00; }
+.toast.toast-warn  { border-color: #ff9800; background: rgba(28,20,0,0.97); color: #ffd54f; }
+.toast.toast-error { border-color: var(--red); background: rgba(28,0,0,0.97); }
+.toast.toast-ok    { border-color: var(--green); background: rgba(0,28,0,0.97); }
 .toast.toast-out   { animation: toastOut .3s ease forwards; }
 @keyframes toastIn  { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 @keyframes toastOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(10px); } }
+
+/* ===== QUIZ START MODAL ===== */
+#quiz-start-modal {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.82); z-index: 32000;
+  align-items: center; justify-content: center; padding: 20px;
+}
+#quiz-start-modal.open { display: flex; }
+.qs-box {
+  background: var(--surface); border: 1px solid var(--card-border);
+  border-radius: 16px; padding: 28px 26px 24px; max-width: 400px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,.75);
+  animation: popIn .28s cubic-bezier(.175,.885,.32,1.275);
+}
+.qs-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.qs-deck-name {
+  font-size: 12px; color: var(--accent); font-family: 'DM Mono', monospace;
+  margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--card-border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qs-section { margin-bottom: 18px; }
+.qs-label {
+  font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 9px;
+}
+.qs-mode-btns { display: flex; gap: 7px; }
+.qs-mode-btn {
+  flex: 1; padding: 9px 0; border-radius: 8px; border: 1px solid var(--card-border);
+  background: transparent; color: var(--text-dim); font-family: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.qs-mode-btn:hover  { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.qs-mode-btn.active { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+.qs-countdown-cfg { display: none; margin-top: 12px; }
+.qs-countdown-cfg.visible { display: block; }
+.qs-time-inputs { display: flex; align-items: center; gap: 8px; }
+.qs-time-input {
+  width: 62px; padding: 8px 10px; text-align: center;
+  background: var(--bg); border: 1px solid var(--card-border);
+  border-radius: 8px; color: var(--text); font-size: 18px; font-weight: 700;
+  font-family: 'DM Mono', monospace; outline: none; transition: border-color .2s;
+}
+.qs-time-input:focus { border-color: var(--accent); }
+.qs-colon { font-size: 22px; font-weight: 700; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+.qs-toggles { display: flex; flex-direction: column; gap: 10px; }
+.qs-toggle-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--card-border); background: rgba(0,0,0,.15);
+  font-size: 14px; color: var(--text-dim);
+  transition: border-color .15s, background .15s;
+  user-select: none;
+}
+.qs-toggle-row:hover { border-color: var(--accent); background: var(--accent-dim); }
+.qs-toggle-pill {
+  width: 34px; height: 18px; background: var(--text-muted);
+  border-radius: 9px; position: relative; transition: background .2s; flex-shrink: 0;
+}
+.qs-toggle-pill.on { background: #4caf50; }
+.qs-toggle-pill .switch-knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px; background: #fff;
+  border-radius: 50%; transition: left .2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.qs-toggle-pill.on .switch-knob { left: 18px; }
+.qs-start-btn {
+  width: 100%; padding: 13px 0; background: var(--accent); color: #fff;
+  border: none; border-radius: 10px; font-family: inherit; font-size: 16px;
+  font-weight: 700; cursor: pointer; transition: opacity .2s, transform .1s;
+  margin-top: 20px;
+}
+.qs-start-btn:hover { opacity: .88; transform: translateY(-1px); }
 </style>
 </head>
 <body>
 
 <!-- Toast notification container -->
 <div id="toast-container"></div>
+
+<!-- ==================== QUIZ START MODAL ==================== -->
+<div id="quiz-start-modal">
+  <div class="qs-box">
+    <div class="qs-title">🚀 Start Quiz</div>
+    <div class="qs-deck-name" id="qs-deck-name">Deck</div>
+
+    <div class="qs-section">
+      <div class="qs-label">Timer Mode</div>
+      <div class="qs-mode-btns">
+        <button class="qs-mode-btn active" id="qs-btn-stopwatch" onclick="qsSelectMode('stopwatch')">⏱ Stopwatch</button>
+        <button class="qs-mode-btn"        id="qs-btn-countdown" onclick="qsSelectMode('countdown')">⏳ Countdown</button>
+        <button class="qs-mode-btn"        id="qs-btn-none"      onclick="qsSelectMode('none')">⊘ None</button>
+      </div>
+      <div class="qs-countdown-cfg" id="qs-countdown-cfg">
+        <div class="qs-label" style="margin-top:12px;">Time Limit</div>
+        <div class="qs-time-inputs">
+          <input type="number" id="qs-hours"   class="qs-time-input" min="0" max="9"  value="0"  placeholder="HH">
+          <span class="qs-colon">:</span>
+          <input type="number" id="qs-minutes" class="qs-time-input" min="0" max="59" value="30" placeholder="MM">
+          <span class="qs-colon">:</span>
+          <input type="number" id="qs-seconds" class="qs-time-input" min="0" max="59" value="0"  placeholder="SS">
+        </div>
+      </div>
+    </div>
+
+    <div class="qs-section">
+      <div class="qs-label">Options</div>
+      <div class="qs-toggles">
+        <div class="qs-toggle-row" onclick="qsToggle('randomize')">
+          <div class="qs-toggle-pill on" id="qs-pill-randomize"><div class="switch-knob"></div></div>
+          <span>Randomize Question Order</span>
+        </div>
+        <div class="qs-toggle-row" onclick="qsToggle('shuffle')">
+          <div class="qs-toggle-pill on" id="qs-pill-shuffle"><div class="switch-knob"></div></div>
+          <span>Shuffle Answer Choices</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="qs-start-btn" onclick="applyQuizStart()">▶ Start Quiz</button>
+  </div>
+</div>
 
 <!-- Persistent Site Header -->
 <div id="site-header">
@@ -1963,15 +2080,15 @@ async function loadDeckByUrl(url, name) {
 }
 
 // ── Deck picker modal ──
-let _dpDeckFiles = []; // module-level so pickDeck can reference by index safely
+let _dpDeckFiles = [];
 async function openDeckPicker(deckFiles) {
   _dpDeckFiles = deckFiles;
   const listEl = document.getElementById('dp-list');
   const cachedKeys = await idbKeys();
   listEl.innerHTML = deckFiles.map((f, idx) => {
-    const name  = f.name.replace(/\.apkg$/i, '');
+    const name     = f.name.replace(/\.apkg$/i, '');
     const isCached = cachedKeys.includes(name);
-    const sizeMb = f.size ? (f.size / 1048576).toFixed(1) + ' MB' : '';
+    const sizeMb   = f.size ? (f.size / 1048576).toFixed(1) + ' MB' : '';
     return `
       <div class="dp-item" onclick="pickDeck(${idx})">
         <span class="dp-item-icon">📦</span>
@@ -2338,6 +2455,114 @@ function showToast(msg, type = '', durationMs = 3500) {
     el.classList.add('toast-out');
     el.addEventListener('animationend', () => el.remove(), { once: true });
   }, durationMs);
+}
+
+// ============================================================
+// QUIZ START MODAL
+// ============================================================
+let _qsMode = 'stopwatch';   // 'stopwatch' | 'countdown' | 'none'
+let _qsRandomize = true;
+let _qsShuffle   = true;
+
+function showQuizStartModal(deckName) {
+  document.getElementById('qs-deck-name').textContent = '📚 ' + deckName;
+  // Reset to defaults each time
+  _qsMode = 'stopwatch';
+  _qsRandomize = true;
+  _qsShuffle   = true;
+  qsSelectMode('stopwatch', true);
+  document.getElementById('qs-pill-randomize').classList.add('on');
+  document.getElementById('qs-pill-shuffle').classList.add('on');
+  document.getElementById('quiz-start-modal').classList.add('open');
+}
+
+function qsSelectMode(mode, silent) {
+  _qsMode = mode;
+  ['stopwatch','countdown','none'].forEach(m => {
+    document.getElementById('qs-btn-' + m).classList.toggle('active', m === mode);
+  });
+  document.getElementById('qs-countdown-cfg').classList.toggle('visible', mode === 'countdown');
+}
+
+function qsToggle(which) {
+  if (which === 'randomize') {
+    _qsRandomize = !_qsRandomize;
+    document.getElementById('qs-pill-randomize').classList.toggle('on', _qsRandomize);
+  } else {
+    _qsShuffle = !_qsShuffle;
+    document.getElementById('qs-pill-shuffle').classList.toggle('on', _qsShuffle);
+  }
+}
+
+async function applyQuizStart() {
+  // Validate countdown time if selected
+  let timerLimit = 0;
+  if (_qsMode === 'countdown') {
+    const h = parseInt(document.getElementById('qs-hours').value,   10) || 0;
+    const m = parseInt(document.getElementById('qs-minutes').value, 10) || 0;
+    const s = parseInt(document.getElementById('qs-seconds').value, 10) || 0;
+    timerLimit = h * 3600 + m * 60 + s;
+    if (timerLimit <= 0) {
+      showToast('⚠ Please enter a time greater than 0.', 'warn');
+      return;
+    }
+  }
+
+  document.getElementById('quiz-start-modal').classList.remove('open');
+
+  // Apply randomize / shuffle settings
+  S.randomizeOrder   = _qsRandomize;
+  S.randomizeChoices = _qsShuffle;
+
+  // Sync the toggle buttons in the quiz UI to match
+  const rWrap = document.getElementById('randomize-switch');
+  const rPill = document.getElementById('randomize-pill');
+  const rLabel = document.getElementById('randomize-switch-label');
+  if (_qsRandomize) {
+    rWrap.classList.add('active'); rWrap.classList.remove('inactive');
+    rPill.classList.add('on'); rLabel.textContent = 'Randomized';
+  } else {
+    rWrap.classList.remove('active'); rWrap.classList.add('inactive');
+    rPill.classList.remove('on'); rLabel.textContent = 'Original Order';
+  }
+  const sWrap = document.getElementById('shuffle-choices-switch');
+  const sPill = document.getElementById('shuffle-choices-pill');
+  const sLabel = document.getElementById('shuffle-choices-label');
+  if (_qsShuffle) {
+    sWrap.classList.add('active'); sWrap.classList.remove('inactive');
+    sPill.classList.add('on'); sLabel.textContent = 'Shuffle Choices';
+  } else {
+    sWrap.classList.remove('active'); sWrap.classList.add('inactive');
+    sPill.classList.remove('on'); sLabel.textContent = 'Fixed Choices';
+  }
+
+  // Reshuffle deck with the chosen settings (resets answered, idx=0)
+  reshuffleDeck();
+  updateScoreUI();
+
+  // Set up timer
+  S.timerLimit   = timerLimit;
+  S.timerElapsed = _qsMode === 'countdown' ? timerLimit : 0;
+  updateTimerDisplay();
+
+  S.quizStartTime = Date.now();
+
+  if (_qsMode !== 'none') {
+    startTimer();
+  } else {
+    // Hide timer chip when no timer selected
+    const chip = document.getElementById('timer-chip');
+    if (chip) { chip.style.display = 'none'; }
+  }
+
+  // Show timer chip if timer mode
+  if (_qsMode !== 'none') {
+    const chip = document.getElementById('timer-chip');
+    if (chip) chip.style.display = '';
+  }
+
+  await renderCard(0);
+  updateChecklist();
 }
 
 async function selectQuiz(idx) {
@@ -2718,15 +2943,17 @@ function reshuffleDeck() {
 async function resetQuiz() {
   if (!S.notes.length) return;
   if (!confirm('Reset score and restart the quiz?')) return;
-  // Fire-and-forget — don't block the UI waiting for Firestore
   saveScoreAsync({ correct:0, total:0 }).catch(e => console.warn('Score reset save failed:', e));
   reshuffleDeck();
   updateScoreUI();
-  // Restart timer from zero
-  S.timerElapsed = S.timerLimit > 0 ? S.timerLimit : 0;
+  // Stop current timer then re-show the quiz-start modal so user can pick settings again
+  stopTimer();
+  S.timerLimit   = 0;
+  S.timerElapsed = 0;
   updateTimerDisplay();
-  startTimer();
-  await renderCard(0);
+  const chip = document.getElementById('timer-chip');
+  if (chip) chip.style.display = '';
+  showQuizStartModal(S.deckName);
 }
 
 // ============================================================
@@ -3090,7 +3317,7 @@ async function submitQuiz() {
   const answeredCount = Object.keys(S.answered).length;
   if (answeredCount < S.answerableCount) {
     const remaining = S.answerableCount - answeredCount;
-    showToast(`⚠ ${remaining} question${remaining !== 1 ? 's' : ''} still unanswered. Please answer all before submitting.`, 'warn', 4000);
+    showToast(`⚠ ${remaining} question${remaining !== 1 ? 's' : ''} still unanswered.`, 'warn', 4000);
     return;
   }
 
@@ -3170,9 +3397,14 @@ function fmtTimerTime(sec) {
 
 function startTimer() {
   if (S.timerInterval) clearInterval(S.timerInterval);
+  // Guard: never fire a countdown that is already expired
+  if (S.timerLimit > 0 && S.timerElapsed <= 0) {
+    S.timerElapsed = S.timerLimit;
+    updateTimerDisplay();
+  }
   S.timerRunning = true;
   const chip = document.getElementById('timer-chip');
-  if (chip) chip.classList.add('tc-running');
+  if (chip) { chip.style.display = ''; chip.classList.add('tc-running'); }
   S.timerInterval = setInterval(tickTimer, 1000);
   tickTimer(); // immediate first tick
 }
@@ -3204,11 +3436,9 @@ function tickTimer() {
     }
     if (S.timerElapsed <= 0) {
       stopTimer();
-      // Auto-submit if quiz is active
       if (!S.submitted && S.answerableCount > 0) {
         const chip = document.getElementById('timer-chip');
-        if (chip) { chip.textContent = '⏰ Time\'s up!'; }
-        // Fill any unanswered with a forced skip so submitQuiz doesn't block
+        if (chip) chip.textContent = '⏰ Time\'s up!';
         for (let i = 0; i < S.notes.length; i++) {
           if (S.answered[i] === undefined && S.shuffles[i] !== null) {
             S.answered[i] = { chosen: -1, ok: false, chosenText: '', skipped: true };
@@ -3788,15 +4018,16 @@ async function loadApkgCore(fileName, zip, buf, deckFilter) {
     }
 
     show('quiz');
-    S.quizStartTime = Date.now();
     loadTakeCount(S.deckKey); // fire-and-forget — populates S.takeCount in background
-    // Reset and start stopwatch timer
+
+    // Stop any leftover timer from a previous quiz
+    stopTimer();
     S.timerLimit   = 0;
     S.timerElapsed = 0;
     updateTimerDisplay();
-    startTimer();
-    await renderCard(0);
-    updateChecklist();
+
+    // Show the quiz-start modal instead of auto-starting
+    showQuizStartModal(displayName);
 
   } catch(e) { status('❌ Error: ' + e.message); console.error(e); }
 }
